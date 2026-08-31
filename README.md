@@ -1,5 +1,7 @@
 # Jade Mahjong
 
+> Versão inicial nativa: jogo, arte, rede local, testes e pipeline Android.
+
 **Shanghai Mahjong competitivo para dois celulares no mesmo Wi-Fi**, feito em Unity 6 como aplicativo Android nativo. Não usa HTML, WebView, servidor dedicado, conta ou mensalidade.
 
 ## O jogo
