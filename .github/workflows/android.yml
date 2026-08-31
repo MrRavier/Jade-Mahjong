@@ -92,8 +92,6 @@ jobs:
 
       - name: Export native Android APK
         shell: bash
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
         run: |
           set -euo pipefail
           GODOT=".ci/godot/bin/Godot_v${GODOT_TAG}_linux.x86_64"
