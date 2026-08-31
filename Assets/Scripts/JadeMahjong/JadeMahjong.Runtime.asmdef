@@ -1,0 +1,21 @@
+{
+  "name": "JadeMahjong.Runtime",
+  "rootNamespace": "JadeMahjong",
+  "references": [
+    "Unity.InputSystem",
+    "Unity.InputSystem.UI",
+    "Unity.Netcode.Runtime",
+    "Unity.Netcode.Adapter.UTP",
+    "Unity.Networking.Transport",
+    "Unity.ugui"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

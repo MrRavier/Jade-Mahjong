@@ -1,0 +1,16 @@
+X:1
+T:Corte de Jade
+C:Composição original para Jade Mahjong
+M:4/4
+L:1/8
+Q:1/4=104
+K:C
+V:lead clef=treble
+V:pad clef=treble
+V:bass clef=bass
+[V:lead] E2 G A c2 A G | D2 E G A4 | A2 c d e2 d c | G2 A c d4 |
+[V:lead] e2 d c A2 G E | G2 A c A4 | D2 E G A2 G E | C8 |
+[V:pad] [CEG]4 [DFA]4 | [CEG]4 [EAc]4 | [FAc]4 [EGc]4 | [DGA]4 [EGc]4 |
+[V:pad] [FAc]4 [EGc]4 | [DFA]4 [CEG]4 | [DGA]4 [BDF]4 | [CEG]8 |
+[V:bass] C,2 C, G,2 G, | A,2 A, E,2 E, | F,2 F, C2 C | G,2 G, C2 C |
+[V:bass] F,2 F, C2 C | D,2 D, A,2 A, | G,2 G, G,2 G, | C,8 |

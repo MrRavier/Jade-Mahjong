@@ -1,0 +1,19 @@
+{
+  "name": "JadeMahjong.Editor",
+  "rootNamespace": "JadeMahjong.Editor",
+  "references": [
+    "JadeMahjong.Runtime",
+    "Unity.Netcode.Runtime",
+    "Unity.Netcode.Adapter.UTP",
+    "Unity.Networking.Transport"
+  ],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
