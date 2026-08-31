@@ -1,34 +1,65 @@
 # Jade Mahjong
 
-> Versão inicial nativa: jogo, arte, rede local, testes e pipeline Android.
-
-**Shanghai Mahjong competitivo para dois celulares no mesmo Wi-Fi**, feito em Unity 6 como aplicativo Android nativo. Não usa HTML, WebView, servidor dedicado, conta ou mensalidade.
+**Shanghai Mahjong competitivo para dois celulares no mesmo Wi-Fi**, feito em
+Godot 4.7.2 como aplicativo Android nativo. Não usa HTML, WebView, conta,
+servidor dedicado ou mensalidade.
 
 ## O jogo
 
-- Tabuleiro Shanghai completo com **144 peças** e distribuição tradicional.
-- Dois jogadores recebem a mesma disposição; vence quem limpar primeiro.
-- Sala local por código `XXXX-XXXX` ou IP, porta UDP 7777.
-- Arte 16-bit detalhada: Palácio Celestial, peças ornamentadas e seis poses do Imperador de Jade.
-- Dicas limitadas, embaralhamento quando não houver jogadas e cronômetro sincronizado.
-- Trilha original **Corte de Jade**, gerada dentro do aplicativo.
-- Layout horizontal protegido por safe area, com o tabuleiro sempre visível.
+- Tabuleiro Shanghai completo e solucionável com **144 peças em cinco camadas**.
+- Distribuição tradicional: 34 peças regulares em quartetos, quatro flores e
+  quatro estações.
+- **42 sprites de face distintos**, com marfim, jade, ouro e vermelhão; nenhum
+  dominó genérico ou peça sem ilustração.
+- Dois jogadores recebem a mesma semente. Vence quem limpar seu tabuleiro
+  primeiro.
+- Sala local por código `XXXX-XXXX` ou IP na porta UDP 7777.
+- Imperador de Jade como mascote, Palácio Celestial e interface 16-bit
+  ornamentada, com o tabuleiro ocupando a maior parte da tela.
+- Três dicas, reorganização somente quando não há jogada e penalidade de tempo.
+- Trilha original **Corte de Jade**, sintetizada no próprio aplicativo.
 
-## Abrir no Unity
+## Estrutura
 
-1. Instale Unity **6000.3.18f1** com Android Build Support, SDK, NDK e OpenJDK.
-2. Abra a pasta como projeto.
-3. Use **Jade Mahjong > Abrir/Criar cena**.
-4. Pressione Play ou use **Jade Mahjong > Construir APK Android**.
+- `Godot/`: versão de produção nativa e exportável para Android.
+- `Godot/scripts/mahjong_core.gd`: regras, geração determinística e solução.
+- `Godot/scripts/tile_art.gd`: pipeline dos sprites das 42 faces.
+- `Godot/scripts/lan_session.gd`: conexão ENet direta no mesmo Wi-Fi.
+- `Godot/tests/run_tests.gd`: testes de regras, sementes, rede e sprites.
+- `Assets/`: protótipo Unity preservado como histórico; não é usado no APK.
 
-O APK sai em `Builds/Android/Jade-Mahjong.apk`.
+## Abrir e testar
 
-## GitHub Actions
+1. Instale Godot **4.7.2**.
+2. Importe `Godot/project.godot`.
+3. Execute a cena principal ou rode:
 
-O workflow `Android APK` executa testes e publica o APK como artefato. Por exigência de licenciamento do Unity, configure `UNITY_LICENSE`, `UNITY_EMAIL` e `UNITY_PASSWORD` nos Secrets do repositório.
+   ```bash
+   godot --headless --path Godot --script res://tests/run_tests.gd
+   ```
 
-## Controles
+## Gerar o APK
 
-Toque uma peça livre e depois outra igual. Flores combinam com flores; estações combinam com estações. O anfitrião mostra o código da sala e inicia quando o segundo aparelho entrar.
+O workflow `Native Android APK` baixa os binários oficiais do Godot, executa os
+testes, assina um APK de teste, valida a assinatura e instala a build em um
+emulador Android. O artefato final se chama `Jade-Mahjong-APK`.
 
-Consulte [a arquitetura de rede](Docs/Architecture/Multiplayer.md) e [a origem da arte](Docs/Art/Asset-Provenance.md).
+Localmente, com os templates Android configurados:
+
+```bash
+godot --headless --path Godot --export-debug Android ../build/Jade-Mahjong.apk
+```
+
+O pacote é `com.mrravier.jademahjong`, Android 8.0+ (API 26), orientação
+horizontal. O APK contém ARM64 para celulares e x86_64 para o teste automatizado.
+
+## Como conectar
+
+1. Ligue os dois celulares ao mesmo Wi-Fi.
+2. No primeiro, toque em **Criar sala**.
+3. No segundo, informe o código mostrado e toque em **Entrar**.
+4. O anfitrião inicia o duelo quando aparecer **Rival conectado**.
+
+Redes com isolamento de clientes podem bloquear a conexão direta. Consulte
+[a arquitetura de rede](Docs/Architecture/Multiplayer.md) e
+[a proveniência da arte](Docs/Art/Asset-Provenance.md).

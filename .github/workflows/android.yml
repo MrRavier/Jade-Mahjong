@@ -1,50 +1,158 @@
-name: Android APK
+name: Native Android APK
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths:
+      - "Godot/**"
+      - ".github/workflows/android.yml"
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: "4.7.2"
+  GODOT_TAG: "4.7.2-stable"
+  PROJECT_DIR: "Godot"
 
 jobs:
-  tests:
-    name: EditMode tests
+  test-and-build:
+    name: Rules, import and native APK
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: game-ci/unity-test-runner@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          unityVersion: 6000.3.18f1
-          testMode: EditMode
-          artifactsPath: test-artifacts
-          githubToken: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: editmode-results
-          path: test-artifacts
 
-  apk:
-    name: Build native APK
-    needs: tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: game-ci/unity-builder@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+      - name: Install Java 17
+        uses: actions/setup-java@v4
         with:
-          unityVersion: 6000.3.18f1
-          targetPlatform: Android
-          buildMethod: JadeMahjong.Editor.JadeBuild.BuildAndroidFromCommandLine
-          androidExportType: androidPackage
-          customParameters: -customBuildPath build/Android/Jade-Mahjong.apk
-      - uses: actions/upload-artifact@v4
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Godot and export templates
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: .ci/godot
+          key: godot-${{ runner.os }}-${{ env.GODOT_TAG }}-android-templates
+
+      - name: Download official Godot build and Android templates
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci/godot/bin .ci/godot/templates
+          curl -L --fail --retry 3 \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_linux.x86_64.zip" \
+            -o .ci/godot/godot.zip
+          curl -L --fail --retry 3 \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_export_templates.tpz" \
+            -o .ci/godot/templates.tpz
+          unzip -q .ci/godot/godot.zip -d .ci/godot/bin
+          unzip -q .ci/godot/templates.tpz -d .ci/godot/templates
+          chmod +x ".ci/godot/bin/Godot_v${GODOT_TAG}_linux.x86_64"
+          rm .ci/godot/godot.zip .ci/godot/templates.tpz
+
+      - name: Install export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEMPLATE_DEST="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$TEMPLATE_DEST"
+          cp -R .ci/godot/templates/templates/. "$TEMPLATE_DEST/"
+          chmod +x ".ci/godot/bin/Godot_v${GODOT_TAG}_linux.x86_64"
+
+      - name: Create Android debug signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Jade Mahjong,C=BR"
+          fi
+
+      - name: Import project
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT=".ci/godot/bin/Godot_v${GODOT_TAG}_linux.x86_64"
+          "$GODOT" --headless --editor --path "$PROJECT_DIR" --quit
+
+      - name: Run deterministic rules and sprite tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT=".ci/godot/bin/Godot_v${GODOT_TAG}_linux.x86_64"
+          "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/run_tests.gd
+
+      - name: Export native Android APK
+        shell: bash
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+        run: |
+          set -euo pipefail
+          GODOT=".ci/godot/bin/Godot_v${GODOT_TAG}_linux.x86_64"
+          mkdir -p build
+          "$GODOT" --headless --path "$PROJECT_DIR" --export-debug Android ../build/Jade-Mahjong.apk
+          test -s build/Jade-Mahjong.apk
+          sha256sum build/Jade-Mahjong.apk > build/SHA256SUMS.txt
+          "$ANDROID_SDK_ROOT/build-tools/$(ls "$ANDROID_SDK_ROOT/build-tools" | sort -V | tail -1)/apksigner" \
+            verify --verbose build/Jade-Mahjong.apk
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
         with:
           name: Jade-Mahjong-APK
-          path: build/Android/*.apk
+          path: |
+            build/Jade-Mahjong.apk
+            build/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+  emulator-qa:
+    name: Android launch smoke test
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Jade-Mahjong-APK
+          path: build
+
+      - name: Boot emulator, install and launch
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            set -euo pipefail
+            adb install -r build/Jade-Mahjong.apk
+            adb shell wm size 1280x720
+            adb shell monkey -p com.mrravier.jademahjong -c android.intent.category.LAUNCHER 1
+            sleep 12
+            adb shell pidof com.mrravier.jademahjong
+            adb exec-out screencap -p > build/emulator-menu.png
+            adb logcat -d > build/emulator-logcat.txt
+            if grep -E "FATAL EXCEPTION|ANR in com.mrravier.jademahjong" build/emulator-logcat.txt; then
+              exit 1
+            fi
+
+      - name: Upload emulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-QA-Evidence
+          path: |
+            build/emulator-menu.png
+            build/emulator-logcat.txt
+          if-no-files-found: warn
+          retention-days: 30

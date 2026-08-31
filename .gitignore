@@ -13,5 +13,9 @@
 *.csproj
 *.sln
 *.user
+Godot/.godot/
+.tools/
+.ci/
+release/
 *.apk
 *.aab
