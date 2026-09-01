@@ -90,6 +90,17 @@ jobs:
           GODOT=".ci/godot/bin/Godot_v${GODOT_TAG}_linux.x86_64"
           "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/run_tests.gd
 
+      - name: Render native UI evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT=".ci/godot/bin/Godot_v${GODOT_TAG}_linux.x86_64"
+          command -v xvfb-run
+          xvfb-run -a "$GODOT" --path "$PROJECT_DIR" -- --capture
+          test -s /tmp/jade-mahjong-capture.png
+          mkdir -p build
+          cp /tmp/jade-mahjong-capture.png build/native-game-ui.png
+
       - name: Export native Android APK
         shell: bash
         run: |
@@ -109,6 +120,14 @@ jobs:
           path: |
             build/Jade-Mahjong.apk
             build/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload native UI evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Native-UI-Evidence
+          path: build/native-game-ui.png
           if-no-files-found: error
           retention-days: 30
 
@@ -141,6 +160,10 @@ jobs:
             adb shell settings put global hide_error_dialogs 1
             adb shell monkey -p com.mrravier.jademahjong -c android.intent.category.LAUNCHER 1
             sleep 45
+            adb shell uiautomator dump /sdcard/window.xml || true
+            adb pull /sdcard/window.xml build/window.xml || true
+            grep -q "System UI isn't responding" build/window.xml && adb shell input tap 540 460 || true
+            sleep 30
             adb shell pidof com.mrravier.jademahjong
             adb exec-out screencap -p > build/emulator-menu.png
             adb logcat -d > build/emulator-logcat.txt
