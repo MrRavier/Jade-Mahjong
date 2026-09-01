@@ -178,14 +178,14 @@ jobs:
             adb install -r build/Jade-Mahjong.apk
             adb shell settings put global hide_error_dialogs 1
             adb shell am start -n com.mrravier.jademahjong/com.godot.game.GodotAppLauncher
-            sleep 20
+            for attempt in 1 2 3; do sleep 25; if adb shell dumpsys window windows | grep -qiE "not responding|application error"; then adb shell input tap 620 700; fi; done
             adb shell uiautomator dump /sdcard/window.xml || true
             adb pull /sdcard/window.xml build/window.xml || true
             adb shell pidof com.mrravier.jademahjong
             adb exec-out screencap -p > build/emulator-menu.png
-            python3 -c "import struct; image=open('build/emulator-menu.png','rb').read(24); assert image[:8] == b'\\x89PNG\\r\\n\\x1a\\n', 'Screenshot is not PNG'; width,height=struct.unpack('>II', image[16:24]); print(f'Android screenshot: {width}x{height}'); assert width > height, 'Jade Mahjong did not force landscape orientation'"
             adb shell dumpsys window displays > build/orientation.txt
             adb logcat -d > build/emulator-logcat.txt
+            python3 -c "import struct; image=open('build/emulator-menu.png','rb').read(24); assert image[:8] == b'\\x89PNG\\r\\n\\x1a\\n', 'Screenshot is not PNG'; width,height=struct.unpack('>II', image[16:24]); print(f'Android screenshot: {width}x{height}'); assert width > height, 'Jade Mahjong did not force landscape orientation'"
             ! grep -E "FATAL EXCEPTION|ANR in com.mrravier.jademahjong|SCRIPT ERROR" build/emulator-logcat.txt
 
       - name: Upload emulator evidence
@@ -197,5 +197,6 @@ jobs:
             build/emulator-menu.png
             build/emulator-logcat.txt
             build/orientation.txt
+            build/window.xml
           if-no-files-found: warn
           retention-days: 30
