@@ -138,14 +138,13 @@ jobs:
             set -eu
             adb install -r build/Jade-Mahjong.apk
             adb shell wm size 1280x720
+            adb shell settings put global hide_error_dialogs 1
             adb shell monkey -p com.mrravier.jademahjong -c android.intent.category.LAUNCHER 1
-            sleep 12
+            sleep 45
             adb shell pidof com.mrravier.jademahjong
             adb exec-out screencap -p > build/emulator-menu.png
             adb logcat -d > build/emulator-logcat.txt
-            if grep -E "FATAL EXCEPTION|ANR in com.mrravier.jademahjong" build/emulator-logcat.txt; then
-              exit 1
-            fi
+            ! grep -E "FATAL EXCEPTION|ANR in com.mrravier.jademahjong|SCRIPT ERROR" build/emulator-logcat.txt
 
       - name: Upload emulator evidence
         if: always()
