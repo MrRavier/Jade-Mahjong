@@ -177,8 +177,7 @@ jobs:
             adb shell settings put system user_rotation 0
             adb install -r build/Jade-Mahjong.apk
             adb shell settings put global hide_error_dialogs 1
-            activity="$(adb shell cmd package resolve-activity --brief com.mrravier.jademahjong | tr -d '\r')"
-            adb shell am start -W -n "$activity"
+            adb shell am start -W -n com.mrravier.jademahjong/com.godot.game.GodotAppLauncher
             sleep 20
             adb shell uiautomator dump /sdcard/window.xml || true
             adb pull /sdcard/window.xml build/window.xml || true

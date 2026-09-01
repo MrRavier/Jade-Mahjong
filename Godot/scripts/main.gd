@@ -713,6 +713,8 @@ func _capture_after_frames() -> void:
 	await get_tree().process_frame
 	state = ScreenState.PLAYING
 	countdown_overlay.visible = false
+	match_started_ms = Time.get_ticks_msec()
+	timer_label.text = "00:00"
 	await get_tree().create_timer(0.25).timeout
 	var image := get_viewport().get_texture().get_image()
 	image.save_png("/tmp/jade-mahjong-capture.png")
