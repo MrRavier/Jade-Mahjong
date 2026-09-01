@@ -51,10 +51,14 @@ func _make_tile(kind: int, free: bool, selected: bool) -> Image:
 	_diamond(image, 34, 78, 5, RED)
 	_rect(image, 33, 75, 3, 7, Color("f0b64e"))
 	if not free:
-		_rect(image, 4, 5, 61, 82, Color(0.01, 0.03, 0.03, 0.46))
+		# Locked pieces stay readable so the player can plan several layers
+		# ahead; blend into existing pixels instead of replacing the face with
+		# a translucent rectangle, which made most of the board disappear.
+		_shade_rect(image, 4, 5, 61, 82, 0.72)
 		for y in range(10, 84, 6):
 			for x in range(8 + (y % 2) * 3, 64, 8):
-				image.set_pixel(x, y, Color(0.05, 0.11, 0.1, 0.42))
+				var pixel := image.get_pixel(x, y)
+				image.set_pixel(x, y, Color(pixel.r * 0.72, pixel.g * 0.82, pixel.b * 0.78, pixel.a))
 	return image
 
 
@@ -216,6 +220,14 @@ func _outline_rect(image: Image, x: int, y: int, w: int, h: int, color: Color) -
 	_rect(image, x, y + h - 2, w, 2, color)
 	_rect(image, x, y, 2, h, color)
 	_rect(image, x + w - 2, y, 2, h, color)
+
+
+func _shade_rect(image: Image, x: int, y: int, w: int, h: int, factor: float) -> void:
+	for py in range(y, y + h):
+		for px in range(x, x + w):
+			var pixel := image.get_pixel(px, py)
+			if pixel.a > 0.0:
+				image.set_pixel(px, py, Color(pixel.r * factor, pixel.g * factor, pixel.b * factor, pixel.a))
 
 
 func _line(image: Image, x0: int, y0: int, x1: int, y1: int, color: Color, thickness := 1) -> void:

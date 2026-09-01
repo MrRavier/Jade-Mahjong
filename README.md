@@ -6,7 +6,7 @@ servidor dedicado ou mensalidade.
 
 ## O jogo
 
-- Tabuleiro Shanghai completo e solucionável com **144 peças em cinco camadas**.
+- Tabuleiro Shanghai completo e solucionável com **144 peças em cinco camadas**, organizadas numa pirâmide palaciana legível para toque.
 - Distribuição tradicional: 34 peças regulares em quartetos, quatro flores e
   quatro estações.
 - **42 sprites de face distintos**, com marfim, jade, ouro e vermelhão; nenhum
@@ -18,6 +18,7 @@ servidor dedicado ou mensalidade.
   ornamentada, com o tabuleiro ocupando a maior parte da tela.
 - Três dicas, reorganização somente quando não há jogada e penalidade de tempo.
 - Trilha original **Corte de Jade**, sintetizada no próprio aplicativo.
+- Orientação horizontal forçada no Android, peças livres destacadas e uma única rota de toque para evitar seleções duplicadas.
 
 ## Estrutura
 

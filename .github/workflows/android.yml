@@ -63,6 +63,12 @@ jobs:
           cp -R .ci/godot/templates/templates/. "$TEMPLATE_DEST/"
           chmod +x ".ci/godot/bin/Godot_v${GODOT_TAG}_linux.x86_64"
 
+      - name: Cache stable development signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: jade-mahjong-debug-signing-v1
+
       - name: Create Android debug signing key
         shell: bash
         run: |
@@ -90,6 +96,15 @@ jobs:
           GODOT=".ci/godot/bin/Godot_v${GODOT_TAG}_linux.x86_64"
           "$GODOT" --headless --path "$PROJECT_DIR" --script res://tests/run_tests.gd
 
+      - name: Verify rendered touch coordinates
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT=".ci/godot/bin/Godot_v${GODOT_TAG}_linux.x86_64"
+          output="$(timeout 30s "$GODOT" --headless --path "$PROJECT_DIR" -- --qa-touch 2>&1)"
+          echo "$output"
+          grep -q "QA_TOUCH_PASS" <<< "$output"
+
       - name: Render native UI evidence
         shell: bash
         run: |
@@ -110,8 +125,10 @@ jobs:
           "$GODOT" --headless --path "$PROJECT_DIR" --export-debug Android ../build/Jade-Mahjong.apk
           test -s build/Jade-Mahjong.apk
           sha256sum build/Jade-Mahjong.apk > build/SHA256SUMS.txt
-          "$ANDROID_SDK_ROOT/build-tools/$(ls "$ANDROID_SDK_ROOT/build-tools" | sort -V | tail -1)/apksigner" \
-            verify --verbose build/Jade-Mahjong.apk
+          BUILD_TOOLS="$ANDROID_SDK_ROOT/build-tools/$(ls "$ANDROID_SDK_ROOT/build-tools" | sort -V | tail -1)"
+          "$BUILD_TOOLS/apksigner" verify --verbose build/Jade-Mahjong.apk
+          "$BUILD_TOOLS/aapt" dump xmltree build/Jade-Mahjong.apk AndroidManifest.xml > build/manifest.txt
+          grep -Eq 'screenOrientation.*(0x0|landscape)' build/manifest.txt
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
@@ -120,6 +137,7 @@ jobs:
           path: |
             build/Jade-Mahjong.apk
             build/SHA256SUMS.txt
+            build/manifest.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -154,18 +172,27 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-save
           script: |
-            set -eu
+            set -eux
+            adb shell settings put system accelerometer_rotation 0
+            adb shell settings put system user_rotation 0
             adb install -r build/Jade-Mahjong.apk
-            adb shell wm size 1280x720
             adb shell settings put global hide_error_dialogs 1
-            adb shell monkey -p com.mrravier.jademahjong -c android.intent.category.LAUNCHER 1
-            sleep 45
+            activity="$(adb shell cmd package resolve-activity --brief com.mrravier.jademahjong | tr -d '\r')"
+            adb shell am start -W -n "$activity"
+            sleep 20
             adb shell uiautomator dump /sdcard/window.xml || true
             adb pull /sdcard/window.xml build/window.xml || true
-            grep -q "System UI isn't responding" build/window.xml && adb shell input tap 540 460 || true
-            sleep 30
             adb shell pidof com.mrravier.jademahjong
             adb exec-out screencap -p > build/emulator-menu.png
+            python3 - <<'PY'
+            import struct
+            image = open('build/emulator-menu.png', 'rb').read(24)
+            assert image[:8] == b'\x89PNG\r\n\x1a\n', 'Screenshot is not PNG'
+            width, height = struct.unpack('>II', image[16:24])
+            print(f'Android screenshot: {width}x{height}')
+            assert width > height, 'Jade Mahjong did not force landscape orientation'
+            PY
+            adb shell dumpsys window displays > build/orientation.txt
             adb logcat -d > build/emulator-logcat.txt
             ! grep -E "FATAL EXCEPTION|ANR in com.mrravier.jademahjong|SCRIPT ERROR" build/emulator-logcat.txt
 
@@ -177,5 +204,6 @@ jobs:
           path: |
             build/emulator-menu.png
             build/emulator-logcat.txt
+            build/orientation.txt
           if-no-files-found: warn
           retention-days: 30

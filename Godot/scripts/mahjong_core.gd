@@ -19,7 +19,7 @@ func build_board(p_seed: int) -> void:
 	solution.clear()
 	_build_slots()
 	var removal_pairs := _calculate_removal_pairs()
-	assert(removal_pairs.size() == 72, "The turtle layout must yield 72 legal pairs")
+	assert(removal_pairs.size() == 72, "The palace layout must yield 72 legal pairs")
 	var kind_pairs := _make_kind_pairs()
 	_rng.shuffle(kind_pairs)
 	for i in removal_pairs.size():
@@ -108,23 +108,24 @@ func layout_signature() -> String:
 
 
 func _build_slots() -> void:
-	var base_counts := [8, 10, 12, 12, 12, 12, 10, 8]
-	for row in base_counts.size():
-		var count: int = base_counts[row]
-		var start: int = 12 - count
-		for col in count:
-			_add_slot(start + col * 2, row * 2, 0)
+	# A centred five-level palace pyramid. The former layout packed eight
+	# heavily overlapping rows into the mobile board, which made individual
+	# pieces hard to read and almost impossible to tap. This keeps all 144
+	# pieces while using six clean base rows and a legible stepped silhouette.
 	for row in 6:
-		for col in 6:
-			_add_slot(3 + col * 2, 2 + row * 2, 1)
+		for col in 12:
+			_add_slot(col * 2, row * 2, 0)
 	for row in 4:
-		for col in 4:
-			_add_slot(5 + col * 2, 4 + row * 2, 2)
+		for col in 10:
+			_add_slot(2 + col * 2, 2 + row * 2, 1)
+	for row in 4:
+		for col in 6:
+			_add_slot(6 + col * 2, 2 + row * 2, 2)
 	for row in 2:
-		for col in 2:
-			_add_slot(7 + col * 2, 6 + row * 2, 3)
-	for gx in [1, 6, 11, 16]:
-		_add_slot(gx, 7, 4)
+		for col in 3:
+			_add_slot(9 + col * 2, 4 + row * 2, 3)
+	for gx in [10, 12]:
+		_add_slot(gx, 5, 4)
 	assert(tiles.size() == TOTAL_TILES)
 
 
@@ -153,8 +154,8 @@ func _calculate_removal_pairs() -> Array[Vector2i]:
 			var tb: Dictionary = tiles[b]
 			if ta.layer != tb.layer:
 				return ta.layer > tb.layer
-			var da: float = absf(float(ta.gx) - 11.0) + absf(float(ta.gy) - 7.0)
-			var db: float = absf(float(tb.gx) - 11.0) + absf(float(tb.gy) - 7.0)
+			var da: float = absf(float(ta.gx) - 11.0) + absf(float(ta.gy) - 5.0)
+			var db: float = absf(float(tb.gx) - 11.0) + absf(float(tb.gy) - 5.0)
 			return da > db
 		)
 		var first: int = free_ids[0]

@@ -50,6 +50,7 @@ var _last_timer_second := -1
 func _ready() -> void:
 	set_process(true)
 	set_process_unhandled_input(true)
+	_force_landscape()
 	theme_font = load("res://fonts/PressStart2P-Regular.ttf")
 	theme = _make_theme()
 	_build_background()
@@ -65,9 +66,25 @@ func _ready() -> void:
 	lan.match_finished.connect(_finish_match)
 	lan.session_error.connect(_show_message)
 	_show_menu()
-	if "--capture" in OS.get_cmdline_user_args():
+	var user_args := OS.get_cmdline_user_args()
+	if "--capture" in user_args:
 		_start_solo()
 		_capture_after_frames.call_deferred()
+	elif "--qa-touch" in user_args:
+		_start_solo()
+		_qa_touch_after_frames.call_deferred()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_RESUMED:
+		_force_landscape()
+
+
+func _force_landscape() -> void:
+	# The project setting writes landscape into AndroidManifest.xml. Repeating
+	# the request at runtime also recovers after the app resumes on Android.
+	if OS.has_feature("android"):
+		DisplayServer.screen_set_orientation(DisplayServer.SCREEN_LANDSCAPE)
 
 
 func _process(_delta: float) -> void:
@@ -465,11 +482,12 @@ func _on_tile_pressed(tile_id: int) -> void:
 		remaining_label.text = "VOCÊ %03d" % core.remaining
 		if not solo_mode:
 			lan.report_progress(core.remaining)
-		_set_speech(_progress_speech(core.remaining))
 		if core.remaining == 0:
 			if solo_mode:
 				_finish_match(true)
-		elif not core.has_available_pair():
+			return
+		_set_speech(_progress_speech(core.remaining))
+		if not core.has_available_pair():
 			_set_speech("O destino fechou o caminho. Use REORGANIZAR.")
 	else:
 		audio.play_error()
@@ -693,10 +711,36 @@ func _format_time(total_seconds: int) -> String:
 func _capture_after_frames() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
-	await get_tree().create_timer(0.5).timeout
+	state = ScreenState.PLAYING
+	countdown_overlay.visible = false
+	await get_tree().create_timer(0.25).timeout
 	var image := get_viewport().get_texture().get_image()
 	image.save_png("/tmp/jade-mahjong-capture.png")
 	get_tree().quit()
+
+
+func _qa_touch_after_frames() -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	state = ScreenState.PLAYING
+	countdown_overlay.visible = false
+	var pair := core.available_pair()
+	if pair.x < 0:
+		push_error("QA_TOUCH_FAIL: generated board has no available pair")
+		get_tree().quit(1)
+		return
+	for tile_id in [pair.x, pair.y]:
+		var event := InputEventMouseButton.new()
+		event.button_index = MOUSE_BUTTON_LEFT
+		event.position = board_view.tile_rect(tile_id).get_center()
+		event.pressed = true
+		board_view._gui_input(event)
+	if core.remaining != 142:
+		push_error("QA_TOUCH_FAIL: expected one removed pair, remaining=%d" % core.remaining)
+		get_tree().quit(1)
+		return
+	print("QA_TOUCH_PASS: rendered tile centres remove a legal pair")
+	get_tree().quit(0)
 
 
 class BoardView:
@@ -712,11 +756,24 @@ class BoardView:
 	var shake_until_ms := 0
 	var locked_id := -1
 	var locked_until_ms := 0
-	var _rects: Dictionary = {}
+	var _layout := BoardLayout.new()
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
-		resized.connect(queue_redraw)
+		resized.connect(_on_resized)
+		_rebuild_geometry()
+
+	func _on_resized() -> void:
+		_rebuild_geometry()
+		queue_redraw()
+
+	func _rebuild_geometry() -> void:
+		if core != null:
+			_layout.rebuild(size, core.tiles)
+
+	func tile_rect(tile_id: int) -> Rect2:
+		_rebuild_geometry()
+		return _layout.rects.get(tile_id, Rect2())
 
 	func _process(_delta: float) -> void:
 		if Time.get_ticks_msec() < shake_until_ms or Time.get_ticks_msec() < locked_until_ms:
@@ -725,6 +782,7 @@ class BoardView:
 	func _draw() -> void:
 		if core == null or art == null:
 			return
+		_rebuild_geometry()
 		var backdrop := Rect2(Vector2(6, 6), size - Vector2(12, 12))
 		draw_rect(backdrop, Color("061b18d6"), true)
 		draw_rect(backdrop, Color("3fa887"), false, 3.0)
@@ -734,41 +792,21 @@ class BoardView:
 		for corner in [Vector2(24, 24), Vector2(size.x - 24, 24), Vector2(24, size.y - 24), Vector2(size.x - 24, size.y - 24)]:
 			draw_circle(corner, 10, Color("d6aa43"))
 			draw_circle(corner, 6, Color("176b59"))
-		_rects.clear()
-		var tile_w := minf((size.x - 70.0) / 9.65, (size.y - 48.0) / 4.36 * 0.75)
-		tile_w = clampf(tile_w, 42.0, 96.0)
-		var tile_h := tile_w * 4.0 / 3.0
-		var step_x := tile_w * 0.76
-		var step_y := tile_h * 0.48
-		var layout_w := 11.0 * step_x + tile_w + 20.0
-		var layout_h := 7.0 * step_y + tile_h + 20.0
-		var origin := Vector2((size.x - layout_w) * 0.5, (size.y - layout_h) * 0.5)
 		var shake := 0.0
 		if Time.get_ticks_msec() < shake_until_ms:
 			shake = sin(Time.get_ticks_msec() * 0.08) * 5.0
-		var draw_ids: Array[int] = []
-		for i in core.tiles.size():
-			if core.tiles[i].active:
-				draw_ids.append(i)
-		draw_ids.sort_custom(func(a: int, b: int) -> bool:
-			var ta: Dictionary = core.tiles[a]
-			var tb: Dictionary = core.tiles[b]
-			if ta.layer != tb.layer:
-				return ta.layer < tb.layer
-			if ta.gy != tb.gy:
-				return ta.gy < tb.gy
-			return ta.gx < tb.gx
-		)
-		for tile_id in draw_ids:
+		for tile_id in _layout.draw_order:
 			var tile: Dictionary = core.tiles[tile_id]
-			var px: float = origin.x + float(tile.gx) * 0.5 * step_x + float(tile.layer) * 5.0 + shake
-			var py: float = origin.y + float(tile.gy) * 0.5 * step_y - float(tile.layer) * 5.0
-			var rect := Rect2(px, py, tile_w, tile_h)
-			_rects[tile_id] = rect
+			var rect: Rect2 = _layout.rects[tile_id]
+			rect.position.x += shake
 			var free := core.is_free(tile_id)
 			var selected := tile_id == selected_id
 			var texture: Texture2D = art.texture_for(tile.kind, free, selected)
 			draw_texture_rect(texture, rect, false)
+			if free:
+				draw_rect(rect.grow(1.5), Color("4aa88aaa"), false, 2.0)
+			if selected:
+				draw_rect(rect.grow(4.0), Color("ffe39a"), false, 5.0)
 			if tile_id == hint_ids.x or tile_id == hint_ids.y:
 				draw_rect(rect.grow(3), Color("ffe39a"), false, 5.0)
 				draw_circle(rect.position + Vector2(rect.size.x - 8, 8), 7, Color("ffe39a"))
@@ -776,27 +814,16 @@ class BoardView:
 				draw_rect(rect, Color("a93b2c77"), true)
 
 	func _gui_input(event: InputEvent) -> void:
-		var pressed := false
-		var point := Vector2.ZERO
-		if event is InputEventScreenTouch and event.pressed:
-			pressed = true
-			point = event.position
-		elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			pressed = true
-			point = event.position
-		if not pressed:
+		# Android converts one finger tap into the same local mouse event used by
+		# Buttons. Handling InputEventScreenTouch here as well would process the
+		# same finger twice, and its raw position is expressed in viewport space.
+		if not (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed):
 			return
-		var candidates: Array[int] = []
-		for tile_id in _rects:
-			if _rects[tile_id].has_point(point):
-				candidates.append(tile_id)
-		candidates.sort_custom(func(a: int, b: int) -> bool:
-			var ta: Dictionary = core.tiles[a]
-			var tb: Dictionary = core.tiles[b]
-			return ta.layer > tb.layer or (ta.layer == tb.layer and ta.id > tb.id)
-		)
-		if not candidates.is_empty():
-			tile_pressed.emit(candidates[0])
+		var point: Vector2 = event.position
+		_rebuild_geometry()
+		var tile_id := _layout.pick_tile(point, core)
+		if tile_id >= 0:
+			tile_pressed.emit(tile_id)
 			accept_event()
 
 	func show_hint(a: int, b: int) -> void:

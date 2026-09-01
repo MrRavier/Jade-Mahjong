@@ -12,6 +12,8 @@ func _init() -> void:
 	_test_matching_rules()
 	_test_room_codes()
 	_test_tile_sprite_pipeline()
+	_test_orientation_and_scaling()
+	_test_board_geometry_and_touch_targets()
 	if failures.is_empty():
 		print("PASS: %d checks" % checks)
 		quit(0)
@@ -87,6 +89,7 @@ func _test_room_codes() -> void:
 		_check(code.length() == 9 and code[4] == "-", "Room code must use XXXX-XXXX format")
 		_check(network.decode_room_code(code) == address, "Room code must recover %s" % address)
 	_check(network.decode_room_code("BAD!-CODE").is_empty(), "Invalid room codes must be rejected")
+	network.free()
 
 
 func _test_tile_sprite_pipeline() -> void:
@@ -95,3 +98,30 @@ func _test_tile_sprite_pipeline() -> void:
 		var texture := sprites.texture_for(kind, true, false)
 		_check(texture != null, "Kind %d must have a generated sprite" % kind)
 		_check(texture.get_width() == 72 and texture.get_height() == 96, "Kind %d sprite must use the canonical size" % kind)
+
+
+func _test_orientation_and_scaling() -> void:
+	_check(ProjectSettings.get_setting("display/window/handheld/orientation") == DisplayServer.SCREEN_LANDSCAPE, "Android must start in landscape")
+	_check(ProjectSettings.get_setting("display/window/size/viewport_width") > ProjectSettings.get_setting("display/window/size/viewport_height"), "Base viewport must be horizontal")
+	_check(ProjectSettings.get_setting("display/window/stretch/aspect") == "expand", "Wide phones must fill the screen instead of adding black bars")
+	_check(ProjectSettings.get_setting("input_devices/pointing/emulate_mouse_from_touch"), "Touch must drive GUI mouse input")
+
+
+func _test_board_geometry_and_touch_targets() -> void:
+	var view_size := Vector2(940, 508)
+	var viewport_rect := Rect2(Vector2.ZERO, view_size)
+	for seed in [1, 7, 99, 7777, 8675309, 2147483000]:
+		var game := MahjongCore.new()
+		game.build_board(seed)
+		var layout := BoardLayout.new()
+		for pair in game.solution:
+			layout.rebuild(view_size, game.tiles)
+			_check(layout.tile_size.x >= 60.0 and layout.tile_size.y >= 80.0, "Seed %d: tiles must remain finger-sized" % seed)
+			_check(layout.step.x >= layout.tile_size.x * 0.88, "Seed %d: horizontal overlap must stay shallow" % seed)
+			_check(layout.step.y >= layout.tile_size.y * 0.78, "Seed %d: vertical overlap must stay shallow" % seed)
+			for tile_id in [pair.x, pair.y]:
+				var rect: Rect2 = layout.rects.get(tile_id, Rect2())
+				_check(rect.has_area() and viewport_rect.encloses(rect), "Seed %d: active tile %d must remain visible" % [seed, tile_id])
+				_check(layout.pick_tile(rect.get_center(), game) == tile_id, "Seed %d: centre tap must select tile %d" % [seed, tile_id])
+			_check(game.try_remove(pair.x, pair.y), "Seed %d: touch-tested solution pair must remove" % seed)
+		_check(game.remaining == 0, "Seed %d: touch-tested board must be completely playable" % seed)
