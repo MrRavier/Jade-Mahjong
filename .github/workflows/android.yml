@@ -126,13 +126,16 @@ jobs:
       - name: Boot emulator, install and launch
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 30
           arch: x86_64
-          profile: pixel_6
+          profile: pixel_2
+          cores: 2
+          ram-size: 2048M
+          heap-size: 512M
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-save
           script: |
-            set -euo pipefail
+            set -eu
             adb install -r build/Jade-Mahjong.apk
             adb shell wm size 1280x720
             adb shell monkey -p com.mrravier.jademahjong -c android.intent.category.LAUNCHER 1
